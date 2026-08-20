@@ -172,9 +172,9 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
           continue;
         }
         const textW = ctx.measureText(wl.text).width;
-        const padLeft = 2;   // px gap on left side from text start
-        const padRight = 4;  // px gap on right side after text
-        const padY = 1;      // px gap on top and bottom
+        const padLeft = 4;   // px gap on left side from text start
+        const padRight = 6;  // px gap on right side after text
+        const padY = 2;      // px gap on top and bottom
         ctx.fillStyle = bgColor;
         ctx.fillRect(
           baseX - padLeft,
