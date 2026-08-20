@@ -98,6 +98,8 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
   
   const bgColor = settings?.bgColor || '#000000';
   const useBackground = settings?.useBackground ?? true;
+  // bgMode: 'full' = full-width strip (default), 'per-line' = hugs each line's text width
+  const bgMode = settings?.bgMode || 'full';
 
   const family = fontFamily || 'Arial';
 
@@ -123,6 +125,20 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
     wrappedLines.reverse();
   }
 
+  // For 'full' mode: draw one big background rect behind all lines
+  if (useBackground && bgMode === 'full') {
+    const totalHeightUnscaled = wrappedLines.reduce((sum, wl) => {
+      return sum + (wl.isSpacer ? 2 : baseLineHeight * scale);
+    }, 0);
+    ctx.fillStyle = bgColor;
+    if (direction === 'down') {
+      ctx.fillRect(0, 0, canvasWidth, y + totalHeightUnscaled + (fontSize / 2));
+    } else {
+      const startY = y - totalHeightUnscaled - (fontSize / 2);
+      ctx.fillRect(0, startY, canvasWidth, canvasHeight - startY);
+    }
+  }
+
   // Set up drawing coordinates in base scale
   let currentY = direction === 'down' ? y / scale : (y / scale) - baseLineHeight;
   const baseX = x / scale;
@@ -140,11 +156,11 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
 
     const textColor = getLineColor(wl.color);
 
-    // Draw per-line background that hugs the text width (like real SA-MP)
-    if (useBackground) {
+    // For 'per-line' mode: draw background rect that hugs each line's text width
+    if (useBackground && bgMode === 'per-line') {
       const textW = ctx.measureText(wl.text).width;
-      const padX = 1; // 1px horizontal padding
-      const padY = 1; // 1px vertical padding
+      const padX = 1;
+      const padY = 1;
       ctx.fillStyle = bgColor;
       ctx.fillRect(
         baseX - padX,

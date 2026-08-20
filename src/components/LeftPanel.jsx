@@ -144,6 +144,23 @@ export default function LeftPanel({ state, onChange }) {
               <input type="color" id="top-bg-color" value={state.topSettings?.bgColor || '#000000'}
                 onChange={(e) => onChange({ topSettings: { ...state.topSettings, bgColor: e.target.value } })} />
             </div>
+            {(state.topSettings?.useBackground ?? true) && (
+              <div className="chat-opt-row" style={{ marginTop: 4 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 8 }}>Mode:</span>
+                <label className="checkbox-row" style={{ marginRight: 12 }}>
+                  <input type="radio" name="top-bg-mode" value="full"
+                    checked={(state.topSettings?.bgMode || 'full') === 'full'}
+                    onChange={() => onChange({ topSettings: { ...state.topSettings, bgMode: 'full' } })} />
+                  Full width
+                </label>
+                <label className="checkbox-row">
+                  <input type="radio" name="top-bg-mode" value="per-line"
+                    checked={state.topSettings?.bgMode === 'per-line'}
+                    onChange={() => onChange({ topSettings: { ...state.topSettings, bgMode: 'per-line' } })} />
+                  Follow text
+                </label>
+              </div>
+            )}
             <label className="checkbox-row">
               <input type="checkbox" id="top-use-mask" checked={state.topSettings?.useMask ?? false}
                 onChange={(e) => onChange({ topSettings: { ...state.topSettings, useMask: e.target.checked } })} />
@@ -180,6 +197,23 @@ export default function LeftPanel({ state, onChange }) {
               <input type="color" id="bottom-bg-color" value={state.bottomSettings?.bgColor || '#000000'}
                 onChange={(e) => onChange({ bottomSettings: { ...state.bottomSettings, bgColor: e.target.value } })} />
             </div>
+            {(state.bottomSettings?.useBackground ?? true) && (
+              <div className="chat-opt-row" style={{ marginTop: 4 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 8 }}>Mode:</span>
+                <label className="checkbox-row" style={{ marginRight: 12 }}>
+                  <input type="radio" name="bottom-bg-mode" value="full"
+                    checked={(state.bottomSettings?.bgMode || 'full') === 'full'}
+                    onChange={() => onChange({ bottomSettings: { ...state.bottomSettings, bgMode: 'full' } })} />
+                  Full width
+                </label>
+                <label className="checkbox-row">
+                  <input type="radio" name="bottom-bg-mode" value="per-line"
+                    checked={state.bottomSettings?.bgMode === 'per-line'}
+                    onChange={() => onChange({ bottomSettings: { ...state.bottomSettings, bgMode: 'per-line' } })} />
+                  Follow text
+                </label>
+              </div>
+            )}
             <label className="checkbox-row">
               <input type="checkbox" id="bottom-use-mask" checked={state.bottomSettings?.useMask ?? false}
                 onChange={(e) => onChange({ bottomSettings: { ...state.bottomSettings, useMask: e.target.checked } })} />
