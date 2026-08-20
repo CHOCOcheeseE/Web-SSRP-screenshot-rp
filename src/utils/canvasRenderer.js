@@ -123,22 +123,6 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
     wrappedLines.reverse();
   }
 
-  // Calculate actual total height (spacers = 2px unscaled, normal lines = baseLineHeight scaled)
-  // We need to calculate the background rect in original unscaled coordinates
-  const totalHeightUnscaled = wrappedLines.reduce((sum, wl) => {
-    return sum + (wl.isSpacer ? 2 : baseLineHeight * scale);
-  }, 0);
-
-  if (useBackground) {
-    ctx.fillStyle = bgColor;
-    if (direction === 'down') {
-      ctx.fillRect(0, 0, canvasWidth, y + totalHeightUnscaled + (fontSize / 2));
-    } else {
-      const startY = y - totalHeightUnscaled - (fontSize / 2);
-      ctx.fillRect(0, startY, canvasWidth, canvasHeight - startY);
-    }
-  }
-
   // Set up drawing coordinates in base scale
   let currentY = direction === 'down' ? y / scale : (y / scale) - baseLineHeight;
   const baseX = x / scale;
@@ -156,6 +140,20 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
 
     const textColor = getLineColor(wl.color);
 
+    // Draw per-line background that hugs the text width (like real SA-MP)
+    if (useBackground) {
+      const textW = ctx.measureText(wl.text).width;
+      const padX = 1; // 1px horizontal padding
+      const padY = 1; // 1px vertical padding
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(
+        baseX - padX,
+        currentY - padY,
+        textW + padX * 2,
+        baseLineHeight + padY * 2
+      );
+    }
+
     // Simple stroke outline for bold text.
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#000000';
@@ -171,6 +169,7 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
 
   ctx.restore();
 }
+
 
 function wrapText(ctx, text, maxWidth) {
   const words = text.split(' ');
