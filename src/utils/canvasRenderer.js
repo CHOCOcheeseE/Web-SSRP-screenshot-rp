@@ -146,8 +146,49 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
   ctx.save();
   ctx.scale(scale, scale);
 
+  // === PASS 1: Draw all backgrounds first ===
+  // This prevents backgrounds from covering text of adjacent lines.
+  if (useBackground) {
+    let bgY = direction === 'down' ? y / scale : (y / scale) - baseLineHeight;
+
+    if (bgMode === 'full') {
+      // Full-width: one big rect behind all lines (drawn once outside the loop)
+      const totalHeightBase = wrappedLines.reduce((sum, wl) => {
+        return sum + (wl.isSpacer ? (2 / scale) : baseLineHeight);
+      }, 0);
+      ctx.fillStyle = bgColor;
+      if (direction === 'down') {
+        const topY = (y / scale) - 2;
+        ctx.fillRect(0, topY, canvasWidth / scale, totalHeightBase + 4);
+      } else {
+        const bottomY = (y / scale);
+        ctx.fillRect(0, bottomY - totalHeightBase - 2, canvasWidth / scale, totalHeightBase + 4);
+      }
+    } else {
+      // Per-line: draw each line's bg box individually
+      for (const wl of wrappedLines) {
+        if (wl.isSpacer) {
+          bgY += direction === 'down' ? (2 / scale) : -(2 / scale);
+          continue;
+        }
+        const textW = ctx.measureText(wl.text).width;
+        const padLeft = 2;   // px gap on left side from text start
+        const padRight = 4;  // px gap on right side after text
+        const padY = 1;      // px gap on top and bottom
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(
+          baseX - padLeft,
+          bgY - padY,
+          textW + padLeft + padRight,
+          baseLineHeight + padY * 2
+        );
+        bgY += direction === 'down' ? baseLineHeight : -baseLineHeight;
+      }
+    }
+  }
+
+  // === PASS 2: Draw all text (stroke + fill) on top of backgrounds ===
   for (const wl of wrappedLines) {
-    // Spacer: fixed 2px per blank line (converted to base scale)
     if (wl.isSpacer) {
       const spacerBase = 2 / scale;
       currentY += direction === 'down' ? spacerBase : -spacerBase;
@@ -156,30 +197,11 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
 
     const textColor = getLineColor(wl.color);
 
-    // For 'per-line' mode: draw background rect that hugs each line's text width
-    if (useBackground && bgMode === 'per-line') {
-      const textW = ctx.measureText(wl.text).width;
-      // Padding in base-scale pixels. Larger values = more space around the text.
-      // Left starts from 0 (left edge) to match SA-MP reference.
-      const padLeft = baseX;        // start from left canvas edge
-      const padRight = 4;           // right side padding after text
-      const padY = 2;               // top & bottom padding
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(
-        0,                          // always start from left edge
-        currentY - padY,
-        baseX + textW + padRight,   // left offset + text width + right padding
-        baseLineHeight + padY * 2
-      );
-    }
-
-    // Simple stroke outline for bold text.
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#000000';
     ctx.lineJoin = 'round';
     ctx.strokeText(wl.text, baseX, currentY);
 
-    // Draw colored text once
     ctx.fillStyle = textColor;
     ctx.fillText(wl.text, baseX, currentY);
 
