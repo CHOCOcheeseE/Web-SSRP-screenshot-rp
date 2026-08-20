@@ -159,13 +159,16 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
     // For 'per-line' mode: draw background rect that hugs each line's text width
     if (useBackground && bgMode === 'per-line') {
       const textW = ctx.measureText(wl.text).width;
-      const padX = 1;
-      const padY = 1;
+      // Padding in base-scale pixels. Larger values = more space around the text.
+      // Left starts from 0 (left edge) to match SA-MP reference.
+      const padLeft = baseX;        // start from left canvas edge
+      const padRight = 4;           // right side padding after text
+      const padY = 2;               // top & bottom padding
       ctx.fillStyle = bgColor;
       ctx.fillRect(
-        baseX - padX,
+        0,                          // always start from left edge
         currentY - padY,
-        textW + padX * 2,
+        baseX + textW + padRight,   // left offset + text width + right padding
         baseLineHeight + padY * 2
       );
     }
