@@ -131,8 +131,29 @@
   border-radius: 20px;
 }
 
+.filter-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 90%;
+  justify-content: center;
+}
+
 .filter-slider {
-  width: 80%;
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-slider-val {
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 1px 4px;
+  border-radius: 4px;
+  min-width: 28px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .filter-thumb-label {

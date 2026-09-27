@@ -3,17 +3,27 @@ import './RightPanel.css';
 import { renderCanvas, getFilterCSS } from '../utils/canvasRenderer';
 
 const FILTERS = [
-  { id: 'brightness', label: 'Brightness', hasSlider: true },
+  { id: 'cctv', label: 'CCTV', hasSlider: true, min: 20, max: 100, defaultVal: 80 },
+  { id: 'cctv_vhs', label: 'CCTV + VHS', hasSlider: true, min: 20, max: 100, defaultVal: 80 },
+  { id: 'vhs', label: 'VHS', hasSlider: true, min: 20, max: 100, defaultVal: 80 },
+  { id: 'brightness', label: 'Brightness', hasSlider: true, min: 50, max: 200, defaultVal: 120 },
+  { id: 'contrast', label: 'Contrast', hasSlider: true, min: 50, max: 200, defaultVal: 140 },
+  { id: 'saturate', label: 'Saturate', hasSlider: true, min: 50, max: 250, defaultVal: 180 },
   { id: 'grayscale', label: 'Grayscale' },
   { id: 'sepia', label: 'Sepia' },
-  { id: 'saturate', label: 'Saturate' },
-  { id: 'contrast', label: 'Contrast' },
 ];
 
 export default function RightPanel({ state }) {
   const previewRef = useRef(null);
   const [activeFilter, setActiveFilter] = useState(null);
-  const [filterValues, setFilterValues] = useState({ brightness: 120, saturate: 180, contrast: 140 });
+  const [filterValues, setFilterValues] = useState({
+    brightness: 120,
+    saturate: 180,
+    contrast: 140,
+    cctv: 80,
+    cctv_vhs: 80,
+    vhs: 80,
+  });
   const [copied, setCopied] = useState(false);
   const thumbRefs = useRef({});
 
@@ -141,16 +151,18 @@ export default function RightPanel({ state }) {
                   <div className="filter-remove-overlay">
                     <span>Remove</span>
                     {f.hasSlider && (
-                      <input
-                        type="range"
-                        min={50}
-                        max={200}
-                        value={filterValues[f.id] || 120}
-                        onClick={e => e.stopPropagation()}
-                        onChange={e => setFilterValues(prev => ({ ...prev, [f.id]: parseInt(e.target.value) }))}
-                        className="filter-slider"
-                        id={`slider-${f.id}`}
-                      />
+                      <div className="filter-slider-wrap" onClick={e => e.stopPropagation()}>
+                        <input
+                          type="range"
+                          min={f.min ?? 50}
+                          max={f.max ?? 200}
+                          value={filterValues[f.id] ?? f.defaultVal ?? 100}
+                          onChange={e => setFilterValues(prev => ({ ...prev, [f.id]: parseInt(e.target.value) }))}
+                          className="filter-slider"
+                          id={`slider-${f.id}`}
+                        />
+                        <span className="filter-slider-val">{filterValues[f.id] ?? f.defaultVal ?? 100}%</span>
+                      </div>
                     )}
                   </div>
                 )}
