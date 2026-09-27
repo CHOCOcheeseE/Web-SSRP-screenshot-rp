@@ -247,13 +247,13 @@ function applyFilter(ctx, filterName, filterValues = {}) {
 
   switch (filterName) {
     case 'cctv':
-      ctx.filter = 'brightness(50%) contrast(140%) saturate(65%)';
+      ctx.filter = 'contrast(106%) saturate(92%) brightness(100%)';
       break;
     case 'cctv_vhs':
-      ctx.filter = 'brightness(52%) contrast(135%) saturate(70%)';
+      ctx.filter = 'contrast(108%) saturate(96%) brightness(100%)';
       break;
     case 'vhs':
-      ctx.filter = 'contrast(125%) saturate(95%) brightness(95%)';
+      ctx.filter = 'contrast(115%) saturate(98%) brightness(100%)';
       break;
     case 'brightness':
       ctx.filter = `brightness(${brightness}%)`;
@@ -281,9 +281,9 @@ export function getFilterCSS(filterName, filterValues = {}) {
   const contrast = filterValues.contrast ?? 150;
 
   switch (filterName) {
-    case 'cctv': return 'brightness(50%) contrast(140%) saturate(65%)';
-    case 'cctv_vhs': return 'brightness(52%) contrast(135%) saturate(70%)';
-    case 'vhs': return 'contrast(125%) saturate(95%) brightness(95%)';
+    case 'cctv': return 'contrast(106%) saturate(92%) brightness(100%)';
+    case 'cctv_vhs': return 'contrast(108%) saturate(96%) brightness(100%)';
+    case 'vhs': return 'contrast(115%) saturate(98%) brightness(100%)';
     case 'brightness': return `brightness(${brightness}%)`;
     case 'grayscale': return 'grayscale(100%)';
     case 'sepia': return 'sepia(100%)';
@@ -295,26 +295,23 @@ export function getFilterCSS(filterName, filterValues = {}) {
 
 /**
  * Authentic CCTV Surveillance Filter
- * Matches real security footage and reference SSRP screenshot:
- * - Dim, nocturnal/surveillance exposure (dark atmosphere)
- * - Prominent high-pass edge halo ringing that glows around character silhouettes
- * - Horizontal interlacing comb lines (alternating scanline displacement)
- * - Murky greenish-cyan surveillance color grading
- * - Analog sensor grain / noise
- * - Security camera lens vignette
+ * Matches the bright, clean reference SSRP screenshot:
+ * - Natural bright exposure (not darkened!)
+ * - Organic horizontal wave ripples ("gelombang")
+ * - Luminous edge halos around character silhouettes (with thresholding for smooth ground/walls)
+ * - Subtle cool CCTV tint & fine scanlines
  */
 function applyCCTV(ctx, W, H, intensityVal = 80) {
   try {
     const intensity = Math.max(0.1, Math.min(1.0, (intensityVal ?? 80) / 100));
 
-    // Capture base darkened image from canvas
     const offscreen = document.createElement('canvas');
     offscreen.width = W;
     offscreen.height = H;
     const offCtx = offscreen.getContext('2d');
     offCtx.drawImage(ctx.canvas, 0, 0);
 
-    // Create blurred copy for High-Pass edge difference
+    // Create blurred copy for edge halo
     const blurCanvas = document.createElement('canvas');
     blurCanvas.width = W;
     blurCanvas.height = H;
@@ -329,102 +326,89 @@ function applyCCTV(ctx, W, H, intensityVal = 80) {
     const outImgData = ctx.createImageData(W, H);
     const out = outImgData.data;
 
-    const haloStrength = 2.6 * intensity;
-    const combShift = Math.max(1, Math.round(1.5 * intensity));
-    const scanlineDim = 1 - 0.24 * intensity;
-    const noiseScale = 20 * intensity;
-    const centerX = W / 2;
-    const centerY = H / 2;
+    // Parameters tuned to match the reference examples:
+    // - BRIGHT & CRISP ("terang")
+    // - Prominent organic wave ("gelombang")
+    // - Glowing edge halos around dark silhouettes
+    // - Fine scanlines
+    const haloStrength = 1.8 * intensity;
+    const waveAmp1 = 2.8 * intensity;
+    const waveFreq1 = 0.045;
+    const waveAmp2 = 1.4 * intensity;
+    const waveFreq2 = 0.11;
+    const chromaShift = 1.5 * intensity;
+    const scanlineDim = 1.0 - (0.10 * intensity); // subtle 8-10% dim, keeps image bright!
+    const noiseScale = 5 * intensity;
 
     for (let y = 0; y < H; y++) {
       const rowOffset = y * W * 4;
       const isOdd = (y % 2 === 1);
-      const shift = isOdd ? combShift : 0;
-      const dy = (y - centerY) / centerY;
-      const dySq = dy * dy;
+
+      // Smooth horizontal wave ripple ("gelombang")
+      const wave = Math.sin(y * waveFreq1) * waveAmp1 + Math.sin(y * waveFreq2) * waveAmp2;
+      const comb = isOdd ? (0.8 * intensity) : 0;
+      const baseShift = wave + comb;
 
       for (let x = 0; x < W; x++) {
         const idx = rowOffset + x * 4;
 
-        // Interlaced comb sampling: sample slightly shifted horizontally on odd rows
-        const srcX = Math.max(0, Math.min(W - 1, x + shift));
-        const srcIdx = rowOffset + srcX * 4;
+        // Sample channels with wave and subtle chroma shift
+        const rx = Math.max(0, Math.min(W - 1, Math.round(x + baseShift - chromaShift)));
+        const rIdx = rowOffset + rx * 4;
+        let r = baseData[rIdx];
 
-        let r = baseData[srcIdx];
-        let g = baseData[srcIdx + 1];
-        let b = baseData[srcIdx + 2];
+        const gx = Math.max(0, Math.min(W - 1, Math.round(x + baseShift)));
+        const gIdx = rowOffset + gx * 4;
+        let g = baseData[gIdx + 1];
 
-        const br = blurData[srcIdx];
-        const bg = blurData[srcIdx + 1];
-        const bb = blurData[srcIdx + 2];
+        const bx = Math.max(0, Math.min(W - 1, Math.round(x + baseShift + chromaShift)));
+        const bIdx = rowOffset + bx * 4;
+        let b = baseData[bIdx + 2];
 
-        // 1. High-Pass Halo differences
+        // Blurred sample at center position
+        const br = blurData[gIdx];
+        const bg = blurData[gIdx + 1];
+        const bb = blurData[gIdx + 2];
+
         const dr = r - br;
         const dg = g - bg;
         const db = b - bb;
+        const diffMag = Math.max(Math.abs(dr), Math.abs(dg), Math.abs(db));
 
-        r += dr * haloStrength;
-        g += dg * haloStrength;
-        b += db * haloStrength;
+        // Thresholding: only distinct edges get halo, flat surfaces remain clean & smooth!
+        if (diffMag > 10) {
+          const factor = haloStrength * Math.min(1.0, (diffMag - 10) / 18);
+          r += dr * factor;
+          g += dg * factor;
+          b += db * factor;
 
-        // Extra luminous boost on positive edge transitions (creates the glowing contour around silhouettes)
-        const edgeMag = (dr + dg + db) / 3;
-        if (edgeMag > 3) {
-          const glow = Math.min(100, Math.pow(edgeMag / 50, 0.75) * 65 * intensity);
-          r += glow * 0.85;
-          g += glow * 1.15; // greenish-cyan surveillance glow
-          b += glow * 1.10;
-        }
-
-        // Horizontal analog ringing ghost (sample 2px left)
-        if (srcX >= 2) {
-          const gIdx = srcIdx - 8;
-          const gdr = baseData[gIdx] - blurData[gIdx];
-          const gdg = baseData[gIdx + 1] - blurData[gIdx + 1];
-          const gdb = baseData[gIdx + 2] - blurData[gIdx + 2];
-          if (gdr > 2 || gdg > 2 || gdb > 2) {
-            const ghost = 0.55 * intensity;
-            r += Math.max(0, gdr) * ghost;
-            g += Math.max(0, gdg) * ghost * 1.1;
-            b += Math.max(0, gdb) * ghost * 1.1;
+          // Luminous edge glow around dark silhouettes against lighter background
+          if (dr > 0 || dg > 0 || db > 0) {
+            const glow = Math.min(60, Math.pow(diffMag / 45, 0.75) * 38 * intensity);
+            r += glow * 0.95;
+            g += glow * 1.08; // subtle greenish-cyan CCTV glow
+            b += glow * 1.06;
           }
         }
 
-        // 2. Surveillance Color Grading: greenish-cyan cast & desaturation
-        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-        const sat = 1 - 0.35 * intensity;
-        r = luma + (r - luma) * sat;
-        g = luma + (g - luma) * sat;
-        b = luma + (b - luma) * sat;
+        // Subtle CCTV color balance: clean, bright, slightly cool surveillance tint
+        r *= (1 - 0.03 * intensity);
+        g *= (1 + 0.04 * intensity);
+        b *= (1 + 0.03 * intensity);
 
-        // Security camera tint (slightly lower reds, higher greens and blues in shadows)
-        r *= (1 - 0.10 * intensity);
-        g *= (1 + 0.14 * intensity);
-        b *= (1 + 0.08 * intensity);
-
-        // 3. Scanlines (darken alternate rows)
+        // Fine horizontal scanline
         if (isOdd) {
           r *= scanlineDim;
           g *= scanlineDim;
           b *= scanlineDim;
         }
 
-        // 4. Analog Sensor Noise / Grain
+        // Very subtle analog grain
         if (noiseScale > 0) {
           const noise = (Math.random() - 0.5) * noiseScale;
           r += noise;
           g += noise;
           b += noise;
-        }
-
-        // 5. Lens Vignette
-        const dx = (x - centerX) / centerX;
-        const distRatio = dx * dx + dySq;
-        if (distRatio > 0.35) {
-          const vig = 1 - Math.min(0.38, (distRatio - 0.35) * 0.30 * intensity);
-          r *= vig;
-          g *= vig;
-          b *= vig;
         }
 
         out[idx] = r < 0 ? 0 : r > 255 ? 255 : r;
@@ -442,8 +426,8 @@ function applyCCTV(ctx, W, H, intensityVal = 80) {
 
 /**
  * Combined CCTV + VHS Filter
- * Merges dim surveillance atmosphere and luminous edge halos (CCTV)
- * with RGB chromatic aberration, horizontal tape wave, scanlines, and tape grain (VHS).
+ * Merges bright CCTV wave ripples ("gelombang") and edge halos
+ * with stronger VHS tape chromatic aberration (RGB split), tape wave ripples, and scanlines.
  */
 function applyCCTV_VHS(ctx, W, H, intensityVal = 80) {
   try {
@@ -469,76 +453,68 @@ function applyCCTV_VHS(ctx, W, H, intensityVal = 80) {
     const outImgData = ctx.createImageData(W, H);
     const out = outImgData.data;
 
-    const haloStrength = 2.4 * intensity;
-    const shift = Math.max(1, Math.round((W / 800) * 2.5 * intensity)); // Chromatic aberration
-    const combShift = Math.max(1, Math.round(1.5 * intensity));
-    const scanlineDim = 1 - 0.25 * intensity;
-    const noiseScale = 24 * intensity;
-    const centerX = W / 2;
-    const centerY = H / 2;
+    const haloStrength = 1.9 * intensity;
+    const waveAmp1 = 3.2 * intensity; // pronounced wave
+    const waveFreq1 = 0.045;
+    const waveAmp2 = 1.6 * intensity;
+    const waveFreq2 = 0.12;
+    const chromaShift = 2.4 * intensity; // stronger VHS RGB split
+    const scanlineDim = 1.0 - (0.12 * intensity);
+    const noiseScale = 7 * intensity;
 
     for (let y = 0; y < H; y++) {
       const rowOffset = y * W * 4;
       const isOdd = (y % 2 === 1);
-      const dy = (y - centerY) / centerY;
-      const dySq = dy * dy;
 
-      // VHS tape wave jitter on occasional lines
-      const wave = (Math.sin(y * 0.18) > 0.85) ? Math.round(2 * intensity) : 0;
-      const lineShift = (isOdd ? combShift : 0) + wave;
+      // Pronounced tape wave and ripple
+      const wave = Math.sin(y * waveFreq1) * waveAmp1 + Math.sin(y * waveFreq2) * waveAmp2;
+      const tapeJitter = (Math.sin(y * 0.22) > 0.88) ? (1.5 * intensity) : 0;
+      const comb = isOdd ? (1.0 * intensity) : 0;
+      const baseShift = wave + tapeJitter + comb;
 
       for (let x = 0; x < W; x++) {
         const idx = rowOffset + x * 4;
 
-        // Chromatic Aberration + Line Shift:
-        // Red channel shifted left (-shift + lineShift)
-        const redX = Math.max(0, Math.min(W - 1, x - shift + lineShift));
-        const redIdx = rowOffset + redX * 4;
-        let r = baseData[redIdx];
+        // Chromatic Aberration
+        const rx = Math.max(0, Math.min(W - 1, Math.round(x + baseShift - chromaShift)));
+        const rIdx = rowOffset + rx * 4;
+        let r = baseData[rIdx];
 
-        // Green channel centered (+ lineShift)
-        const greenX = Math.max(0, Math.min(W - 1, x + lineShift));
-        const greenIdx = rowOffset + greenX * 4;
-        let g = baseData[greenIdx + 1];
+        const gx = Math.max(0, Math.min(W - 1, Math.round(x + baseShift)));
+        const gIdx = rowOffset + gx * 4;
+        let g = baseData[gIdx + 1];
 
-        // Blue channel shifted right (+shift + lineShift)
-        const blueX = Math.max(0, Math.min(W - 1, x + shift + lineShift));
-        const blueIdx = rowOffset + blueX * 4;
-        let b = baseData[blueIdx + 2];
+        const bx = Math.max(0, Math.min(W - 1, Math.round(x + baseShift + chromaShift)));
+        const bIdx = rowOffset + bx * 4;
+        let b = baseData[bIdx + 2];
 
-        // Halo edge difference (using green/center channel)
-        const bgr = blurData[greenIdx];
-        const bgg = blurData[greenIdx + 1];
-        const bgb = blurData[greenIdx + 2];
+        // Halo
+        const br = blurData[gIdx];
+        const bg = blurData[gIdx + 1];
+        const bb = blurData[gIdx + 2];
 
-        const dr = baseData[greenIdx] - bgr;
-        const dg = g - bgg;
-        const db = baseData[greenIdx + 2] - bgb;
+        const dr = r - br;
+        const dg = g - bg;
+        const db = b - bb;
+        const diffMag = Math.max(Math.abs(dr), Math.abs(dg), Math.abs(db));
 
-        r += dr * haloStrength;
-        g += dg * haloStrength;
-        b += db * haloStrength;
+        if (diffMag > 10) {
+          const factor = haloStrength * Math.min(1.0, (diffMag - 10) / 18);
+          r += dr * factor;
+          g += dg * factor;
+          b += db * factor;
 
-        // Luminous edge glow
-        const edgeMag = (dr + dg + db) / 3;
-        if (edgeMag > 3) {
-          const glow = Math.min(90, Math.pow(edgeMag / 50, 0.75) * 60 * intensity);
-          r += glow * 0.9;
-          g += glow * 1.15;
-          b += glow * 1.10;
+          if (dr > 0 || dg > 0 || db > 0) {
+            const glow = Math.min(65, Math.pow(diffMag / 45, 0.75) * 40 * intensity);
+            r += glow * 0.95;
+            g += glow * 1.10;
+            b += glow * 1.08;
+          }
         }
 
-        // Color balance: moody CCTV tone with VHS tape saturation
-        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-        const sat = 1 - 0.18 * intensity;
-        r = luma + (r - luma) * sat;
-        g = luma + (g - luma) * sat;
-        b = luma + (b - luma) * sat;
-
-        // Slight green-cyan surveillance tint
-        r *= (1 - 0.08 * intensity);
-        g *= (1 + 0.12 * intensity);
-        b *= (1 + 0.06 * intensity);
+        // Color grade: bright, vibrant, slight warm/retro tape feel
+        r *= (1 + 0.02 * intensity);
+        b *= (1 - 0.01 * intensity);
 
         // Scanlines
         if (isOdd) {
@@ -547,22 +523,12 @@ function applyCCTV_VHS(ctx, W, H, intensityVal = 80) {
           b *= scanlineDim;
         }
 
-        // Tape Noise
+        // Subtle noise
         if (noiseScale > 0) {
           const noise = (Math.random() - 0.5) * noiseScale;
           r += noise;
           g += noise;
           b += noise;
-        }
-
-        // Vignette
-        const dx = (x - centerX) / centerX;
-        const distRatio = dx * dx + dySq;
-        if (distRatio > 0.35) {
-          const vig = 1 - Math.min(0.38, (distRatio - 0.35) * 0.30 * intensity);
-          r *= vig;
-          g *= vig;
-          b *= vig;
         }
 
         out[idx] = r < 0 ? 0 : r > 255 ? 255 : r;
@@ -584,7 +550,6 @@ function applyCCTV_VHS(ctx, W, H, intensityVal = 80) {
  * - Chromatic Aberration (RGB channel shift & horizontal wave)
  * - Interlaced scanlines (every 3rd line)
  * - Tape noise & vintage warm/contrast grading
- * - Retro vignette
  */
 function applyVHS(ctx, W, H, intensityVal = 80) {
   try {
@@ -596,56 +561,39 @@ function applyVHS(ctx, W, H, intensityVal = 80) {
     const offCtx = offscreen.getContext('2d');
     offCtx.drawImage(ctx.canvas, 0, 0);
 
-    const baseImgData = offCtx.getImageData(0, 0, W, H);
-    const src = baseImgData.data;
+    const baseData = offCtx.getImageData(0, 0, W, H).data;
 
     const outImgData = ctx.createImageData(W, H);
     const out = outImgData.data;
 
-    const shift = Math.max(1, Math.round((W / 800) * 2.5 * intensity));
-    const scanlineDim = 1 - 0.22 * intensity;
-    const noiseScale = 24 * intensity;
-    const sat = 1 + 0.15 * intensity;
-    const centerX = W / 2;
-    const centerY = H / 2;
+    const shift = Math.max(1, Math.round(2.5 * intensity));
+    const waveAmp = 2.0 * intensity;
+    const scanlineDim = 1.0 - (0.12 * intensity);
+    const noiseScale = 6 * intensity;
 
     for (let y = 0; y < H; y++) {
       const rowOffset = y * W * 4;
       const isScanline = (y % 3 === 0);
-      const dy = (y - centerY) / centerY;
-      const dySq = dy * dy;
-      const wave = (Math.sin(y * 0.15) > 0.88) ? Math.round(1.5 * intensity) : 0;
+      const wave = Math.sin(y * 0.05) * waveAmp;
 
       for (let x = 0; x < W; x++) {
         const idx = rowOffset + x * 4;
 
-        // Chromatic Aberration
-        const redX = Math.max(0, Math.min(W - 1, x - shift + wave));
+        const redX = Math.max(0, Math.min(W - 1, Math.round(x + wave - shift)));
         const redIdx = rowOffset + redX * 4;
-        let r = src[redIdx];
+        let r = baseData[redIdx];
 
-        const greenX = Math.max(0, Math.min(W - 1, x + wave));
+        const greenX = Math.max(0, Math.min(W - 1, Math.round(x + wave)));
         const greenIdx = rowOffset + greenX * 4;
-        let g = src[greenIdx + 1];
+        let g = baseData[greenIdx + 1];
 
-        const blueX = Math.max(0, Math.min(W - 1, x + shift + wave));
+        const blueX = Math.max(0, Math.min(W - 1, Math.round(x + wave + shift)));
         const blueIdx = rowOffset + blueX * 4;
-        let b = src[blueIdx + 2];
+        let b = baseData[blueIdx + 2];
 
-        // Contrast & saturation
-        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-        r = luma + (r - luma) * sat;
-        g = luma + (g - luma) * sat;
-        b = luma + (b - luma) * sat;
-
-        // Warm tape color grading
-        r *= (1 + 0.04 * intensity);
-        b *= (1 - 0.03 * intensity);
-
-        // Contrast boost
-        r = (r - 128) * (1 + 0.12 * intensity) + 128;
-        g = (g - 128) * (1 + 0.12 * intensity) + 128;
-        b = (b - 128) * (1 + 0.12 * intensity) + 128;
+        // Warm retro tone
+        r *= (1 + 0.03 * intensity);
+        b *= (1 - 0.02 * intensity);
 
         // Scanlines
         if (isScanline) {
@@ -654,22 +602,12 @@ function applyVHS(ctx, W, H, intensityVal = 80) {
           b *= scanlineDim;
         }
 
-        // Tape noise
+        // Noise
         if (noiseScale > 0) {
           const noise = (Math.random() - 0.5) * noiseScale;
           r += noise;
           g += noise;
           b += noise;
-        }
-
-        // Vignette
-        const dx = (x - centerX) / centerX;
-        const distRatio = dx * dx + dySq;
-        if (distRatio > 0.45) {
-          const vig = 1 - Math.min(0.3, (distRatio - 0.45) * 0.25 * intensity);
-          r *= vig;
-          g *= vig;
-          b *= vig;
         }
 
         out[idx] = r < 0 ? 0 : r > 255 ? 255 : r;
