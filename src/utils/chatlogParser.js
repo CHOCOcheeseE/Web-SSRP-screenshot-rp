@@ -39,30 +39,78 @@ export function parseChatlog(raw, settings = {}) {
     let color = 'white';
     let skip = false;
 
-    if (text.startsWith('*')) {
-      // Action line → purple
-      color = 'purple';
-    } else if (text.includes(' says:')) {
-      // Conversation
-      color = 'white';
-    } else if (text.startsWith('**') || text.match(/^\* \* /)) {
-      // Automated actions
+    // 1. Automated actions (** or * *)
+    if (text.startsWith('**') || text.match(/^\*\s*\*/)) {
       if (!includeAutomated) { skip = true; }
       color = 'purple';
-    } else if (
-      text.startsWith('[radio]') || 
-      text.toLowerCase().startsWith('[radio]') ||
-      text.match(/^\[.+\] .+ says \(radio\)/i)
+    }
+    // 2. Action / Roleplay lines (* /me, /do, /ame, /ado, >)
+    else if (text.startsWith('*') || text.startsWith('>')) {
+      color = 'purple';
+    }
+    // 3. Megaphone speech
+    else if (
+      text.match(/megaphone/i) || 
+      text.match(/^\[megaphone\]/i)
+    ) {
+      color = 'yellow';
+    }
+    // 4. Radio / Walkie-talkie
+    else if (
+      text.toLowerCase().startsWith('[radio]') || 
+      text.toLowerCase().startsWith('[wt]') ||
+      text.match(/\[.+\]\s*.+says\s*\(radio\)/i) ||
+      text.match(/\(radio\)/i) ||
+      text.match(/\[radio\]/i) ||
+      text.match(/\(walkie\)/i) ||
+      text.match(/\[walkie\]/i)
     ) {
       if (!includeRadio) { skip = true; }
       color = 'yellow';
-    } else {
-      // Ignore anything else (Contact info, ads, system messages)
+    }
+    // 5. Speech & Dialogue: says, shouts, whispers, screams, yells, asks (with any (to ...), [low], etc.)
+    else if (text.match(/\b(says|shouts|whispers|screams|yells|asks)\b.*?:/i)) {
+      color = 'white';
+    }
+    // 6. Broadcasts (news, ads, government)
+    else if (
+      text.match(/^\[(AD|NEWS|SAN|GOV|LIVE)\]/i) ||
+      text.match(/^(Advertisement|SAN News):/i)
+    ) {
+      if (!includeBroadcasts) { skip = true; }
+      color = 'broadcast';
+    }
+    // 7. Server / System notices
+    else if (
+      text.match(/^\[(INFO|NOTICE|NOTE)\]/i) ||
+      text.match(/^(INFO|NOTICE):/i)
+    ) {
+      if (!includeNotices) { skip = true; }
+      color = 'yellow';
+    }
+    // 8. OOC chat (( ... ))
+    else if (
+      text.startsWith('((') || 
+      text.endsWith('))') ||
+      text.match(/^[A-Za-z0-9_ ]+:\s*\(\(/) ||
+      text.includes('(( [OOC]')
+    ) {
+      color = 'white';
+    }
+    // 9. Custom dialogue format: "Name: message" (excluding known system keywords)
+    else if (
+      text.match(/^[A-Za-z0-9_ ()[\]]+:\s*.+/) &&
+      !text.match(/^(SERVER|SYSTEM|BANK|ADMIN|ADMINISTRATOR|ERROR|USAGE|PAYCHECK|WARNING|PAGER):/i)
+    ) {
+      color = 'white';
+    }
+    else {
+      // Ignore other system logs / connecting messages
       skip = true;
     }
 
     // /low detection: if character name is present and it's their /low
-    if (characterName && text.includes(`${characterName} says`) && text.includes('(low)')) {
+    if (characterName && text.includes(characterName) && (text.includes('(low)') || text.includes('[low]'))) {
       color = 'white-bright';
     }
 
@@ -83,7 +131,8 @@ export function parseChatlog(raw, settings = {}) {
 export function getLineColor(colorKey) {
   switch (colorKey) {
     case 'purple': return '#C2A2DA'; // Exact SA-MP /me color
-    case 'yellow': return '#FFFF00';
+    case 'yellow': return '#FFFF00'; // Radio / Megaphone / Notices
+    case 'broadcast': return '#33AA33'; // Ads / News
     case 'white-bright': return '#FFFFFF';
     case 'white':
     default:
