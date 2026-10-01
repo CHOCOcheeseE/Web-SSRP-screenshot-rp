@@ -1,6 +1,30 @@
 import { getLineColor } from './chatlogParser';
 
 /**
+ * Parse a SA-MP style string with {RRGGBB} color codes into an array of segments.
+ * e.g. "{FFFFFF}Hello {00FF00}world" -> [{color:'#FFFFFF',text:'Hello '},{color:'#00FF00',text:'world'}]
+ * @param {string} text
+ * @param {string} defaultColor hex fallback
+ * @returns {{ text: string, color: string }[]}
+ */
+function parseColoredSegments(text, defaultColor = '#FFFFFF') {
+  const segments = [];
+  // Match optional leading color tag then text up to the next tag
+  const re = /(?:\{([A-Fa-f0-9]{6})\})?([^{]*)/g;
+  let currentColor = defaultColor;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    const [, colorCode, rawText] = match;
+    if (colorCode) currentColor = `#${colorCode}`;
+    if (rawText) {
+      segments.push({ text: rawText, color: currentColor });
+    }
+    if (match.index + match[0].length >= text.length) break;
+  }
+  return segments.length ? segments : [{ text, color: defaultColor }];
+}
+
+/**
  * Render the final SSRP screenshot onto a canvas.
  * @param {HTMLCanvasElement} canvas
  * @param {object} options
@@ -124,6 +148,26 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
       wrappedLines.push({ text: '', color: 'white', isSpacer: true });
       continue;
     }
+
+    if (line.isPayinfo) {
+      // Parse inline color segments, then wrap using plain text for width calc
+      const segments = parseColoredSegments(line.text);
+      const plainText = segments.map(s => s.text).join('');
+      const wordLines = wrapText(ctx, plainText, baseWrapWidth);
+      // For now only support single-line payinfo (most common case)
+      for (let i = 0; i < wordLines.length; i++) {
+        // Re-parse this wrapped chunk's segments proportionally
+        // (simple approach: keep all segments for first wrap line)
+        wrappedLines.push({
+          segments: i === 0 ? segments : [{ text: wordLines[i], color: '#FFFFFF' }],
+          color: 'payinfo',
+          isPayinfo: true,
+          firstOfLine: i === 0,
+        });
+      }
+      continue;
+    }
+
     const words = wrapText(ctx, line.text, baseWrapWidth);
     for (let i = 0; i < words.length; i++) {
       wrappedLines.push({ text: words[i], color: line.color, firstOfLine: i === 0 });
@@ -204,15 +248,37 @@ function drawChatLines(ctx, lines, { x, y, direction, fontSize, fontFamily, widt
       continue;
     }
 
-    const textColor = getLineColor(wl.color);
+    if (wl.isPayinfo && wl.segments) {
+      // Multi-colored inline rendering for PAYINFO
+      let curX = baseX;
 
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#000000';
-    ctx.lineJoin = 'round';
-    ctx.strokeText(wl.text, baseX, currentY);
+      // First pass: draw all strokes
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#000000';
+      ctx.lineJoin = 'round';
+      let strokeX = baseX;
+      for (const seg of wl.segments) {
+        ctx.strokeText(seg.text, strokeX, currentY);
+        strokeX += ctx.measureText(seg.text).width;
+      }
 
-    ctx.fillStyle = textColor;
-    ctx.fillText(wl.text, baseX, currentY);
+      // Second pass: draw colored fills
+      for (const seg of wl.segments) {
+        ctx.fillStyle = seg.color;
+        ctx.fillText(seg.text, curX, currentY);
+        curX += ctx.measureText(seg.text).width;
+      }
+    } else {
+      const textColor = getLineColor(wl.color);
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#000000';
+      ctx.lineJoin = 'round';
+      ctx.strokeText(wl.text, baseX, currentY);
+
+      ctx.fillStyle = textColor;
+      ctx.fillText(wl.text, baseX, currentY);
+    }
 
     currentY += direction === 'down' ? baseLineHeight : -baseLineHeight;
   }
